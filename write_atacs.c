@@ -38,7 +38,7 @@
 
 double haversine(double lat1, double lon1, double lat2, double lon2);
 
-uint8_t Verbose = false;
+uint8_t Verbose = true;
 
 // -----------------------------
 // Shared memory structures
@@ -348,8 +348,11 @@ int main() {
     cmds.fspec[0] = "./delay";
     cmds.fspec[1] = "./skip_atacs";
 
-    const char *device = "/dev/ttyATACS";
-    const int baudrate = B19200;
+    //const char *device = "/dev/ttyATACS";
+    const char *device = "/dev/ttyUSB0";
+    
+    //const int baudrate = B19200;
+    const int baudrate = B115200;
 
     // -----------------------------
     // Semaphor timing
@@ -431,18 +434,31 @@ int main() {
     ATACS_FRAME_t atacs_frame_out; 
 
     int num_bytes;
-    //int rtn; 
+
+    // -------------------------------- 
+    // The heart of this process 
+    // -------------------------------- 
     while (1) {
 
         // Block on read a line 
         num_bytes = read(serial_fd, read_buf, sizeof(read_buf) - 1);
+
+        printf(">%s\n", 
+        
+        read_buf);
 
         // Time stamp in milliseconds from epoch
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         gps_data.time_epoch = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 
-        // Single getinu_data
+        // Only care about GGA strings    
+        if ( strstr(read_buf,"GGA") == NULL ) continue; 
+
+        // Cheap check on GPS antenna - don't send semaphore if it is disconnected
+        if ( strstr(read_buf,",,,,") != NULL ) continue; 
+
+        // Signals getinu_data
         sem_post(sem);
 
         if (num_bytes > 0) {
@@ -451,6 +467,7 @@ int main() {
             //printf(">%d %s\n", cnt, read_buf);
 
             // Extract the latitude, longitude and attitude
+            printf("read data %s\n",read_buf);
             parseGPGGA(read_buf, &gps_data);
 
             if ( Verbose ) printf("Lat/Lon %.7lf, %.7lf, %.7lf\n", gps_data.latitude, gps_data.longitude, gps_data.altitude);
