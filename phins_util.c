@@ -16,6 +16,7 @@ Orignal: SOT Jan 2024
 #include <math.h>
 #include <time.h>
 #include <stdint.h>
+#include <sys/time.h>  // For gettimeofday
 
 #include "phins_util.h"
 
@@ -65,6 +66,41 @@ void buildGGA(const struct gps_data_t *gps_data, char *nmea_str) {
 
     // Format the final NMEA string with checksum
     snprintf(nmea_str, maxSize, "$%s*%02X\r\n", tmp_str, checksum);
+}
+
+// ---------=======----------------------------
+// $PIXSE,DEPIN_,x.xxx,hhmmss.ssssss*hh<CR><LF>
+// Reference PHINS interface reference page 189
+// --=======-----------------------------------
+void buildDEPIN(const float dep, char *nmea_str) {
+
+    char tmp_str[256];
+    size_t maxSize = 264; 
+
+    char time_str[20];
+    struct timeval tv;
+    struct tm *tm_info;
+    
+    // Get the current time with microsecond precision
+    gettimeofday(&tv, NULL);
+    tm_info = gmtime(&tv.tv_sec); // Use GMT/UTC time
+    
+    // Format time in hhmmss.ssssss format (ss.ssssss from tv_usec)
+    sprintf(time_str, "%02d%02d%02d.%06ld", 
+            tm_info->tm_hour, 
+            tm_info->tm_min, 
+            tm_info->tm_sec, 
+            tv.tv_usec);
+
+    // Format the NMEA string with depth and time
+    sprintf(tmp_str, "PIXSE,DEPIN_,%.3f,%s*", dep, time_str);
+
+    // Calculate the checksum
+    unsigned char checksum = checksum_gps(tmp_str);
+
+    // Format the final NMEA string with checksum
+    snprintf(nmea_str, maxSize, "$%s*%02X\r\n", tmp_str, checksum);
+
 }
 
 // -------------------------------------

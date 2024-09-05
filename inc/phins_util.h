@@ -55,5 +55,6 @@ void cmd_mnl_gps(const struct cmd_mnl_gps_data_t *gps_data, char *msg_str_out);
 void cmd_zupt(uint8_t mode, char *cmd_str);
 void cmd_reset(char *cmd_str);
 
+void buildDEPIN(const float dep, char *nmea_str);
 
 #endif

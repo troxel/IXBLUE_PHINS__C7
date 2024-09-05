@@ -239,7 +239,7 @@ int main(int argc, char *argv[])
         record_data(&phins_frame);
 
         cnt++;
-        sleep(1);
+        //sleep(1);  // what the hell is this doing here. 
     }
 
     sem_close(sem);

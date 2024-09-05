@@ -53,8 +53,13 @@ TARGET7=write_atacs.exe
 TARGET7_SRC=write_atacs.c haversine.c
 TARGET7_OBJ=$(patsubst %.c,$(OBJDIR)/%.o,$(TARGET7_SRC))
 
+# Target 8 specific files (special process for passing thru GPS data for displacement test)
+TARGET8=write_gps.exe
+TARGET8_SRC=write_gps.c haversine.c
+TARGET8_OBJ=$(patsubst %.c,$(OBJDIR)/%.o,$(TARGET8_SRC))
+
 # Targets
-all: $(BINDIR)/$(TARGET1) $(BINDIR)/$(TARGET2) $(BINDIR)/$(TARGET3) $(BINDIR)/$(TARGET4) $(BINDIR)/$(TARGET5) $(BINDIR)/$(TARGET6) $(BINDIR)/$(TARGET7)
+all: $(BINDIR)/$(TARGET1) $(BINDIR)/$(TARGET2) $(BINDIR)/$(TARGET3) $(BINDIR)/$(TARGET4) $(BINDIR)/$(TARGET5) $(BINDIR)/$(TARGET6) $(BINDIR)/$(TARGET7) $(BINDIR)/$(TARGET8)
 
 $(BINDIR)/$(TARGET1): $(COMMON_OBJ) $(TARGET1_OBJ)
 	$(CC) $(COMMON_OBJ) $(TARGET1_OBJ) -Wall $(LIBS) -o $@ 
@@ -77,10 +82,13 @@ $(BINDIR)/$(TARGET6): $(COMMON_OBJ) $(TARGET6_OBJ)
 $(BINDIR)/$(TARGET7): $(COMMON_OBJ) $(TARGET7_OBJ)
 	$(CC) $(COMMON_OBJ) $(TARGET7_OBJ) -Wall ${LIBS} -o $@
 
+$(BINDIR)/$(TARGET8): $(COMMON_OBJ) $(TARGET8_OBJ)
+	$(CC) $(COMMON_OBJ) $(TARGET8_OBJ) -Wall ${LIBS} -o $@
+
 $(OBJDIR)/%.o: %.c
 	$(CC)  -c $(CFLAGS) $< -o $@
 
 clean:
-	rm -f $(OBJDIR)/*.o $(BINDIR)/$(TARGET1) $(BINDIR)/$(TARGET2) $(BINDIR)/$(TARGET3) $(BINDIR)/$(TARGET4) $(BINDIR)/$(TARGET5) $(BINDIR)/$(TARGET6) $(BINDIR)/$(TARGET7)
+	rm -f $(OBJDIR)/*.o $(BINDIR)/$(TARGET1) $(BINDIR)/$(TARGET2) $(BINDIR)/$(TARGET3) $(BINDIR)/$(TARGET4) $(BINDIR)/$(TARGET5) $(BINDIR)/$(TARGET6) $(BINDIR)/$(TARGET7) $(BINDIR)/$(TARGET8)
 
 .PHONY: all clean

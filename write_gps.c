@@ -41,6 +41,12 @@ double haversine(double lat1, double lon1, double lat2, double lon2);
 uint8_t Verbose = true;
 
 // -----------------------------
+// This process takes input from the MasterClock GPS and passes it on to the PHINS. 
+// We could send the GPS directly to the PHINS but the data would not get written
+// to disk and this process sends a semaphore to clocks out the writing of phins data. 
+// -----------------------------
+
+// -----------------------------
 // Shared memory structures
 // -----------------------------
 typedef struct {
@@ -62,14 +68,12 @@ typedef struct {
 //     uint32_t delay;
 // } GPS_FRAME_t;
 
-/* ---------------------------------------------------------*/
-/*  */
-/*----------------------------------------------------------*/
+/* --------------------------------------------------------------*/
+/*  Keeping this same format so we can plot data without changes */
+/*---------------------------------------------------------------*/
 void print_hdr(FILE * fp) {
-
     // Print out header
     fprintf(fp,"lat_rtk,lon_rtk,lat,lon,pos_err,alt,qlty,hdop,sats,time_epoch,atacs\n");
-
 }
 
 /* ---------------------------------------------------------*/
@@ -238,10 +242,14 @@ double parseCoordinate(double coordinate) {
 void parseGPGGA(char *nmea, struct gps_data_t* gps_data) {
     char *token;
     int part = 0;
+
+    char nmea_tmp[1024];
+
+    strcpy(nmea_tmp, nmea);
   
     double lat_gps,lon_gps; 
 
-    token = strtok(nmea, ",");
+    token = strtok(nmea_tmp, ",");
 
     // $GPGGA,001052.00,4758.76758057,N,11633.61604700,E,6,03,38.603,-2.112,M,,M,,*60
     while (token != NULL) {
@@ -280,11 +288,14 @@ void parseGPGGA(char *nmea, struct gps_data_t* gps_data) {
     gps_data->longitude_rtk = parseCoordinate(lon_gps);
 
     // Add random error ~1 ft
-    gps_data->latitude  = addRandomError(gps_data->latitude_rtk);
-    gps_data->longitude = addRandomError(gps_data->longitude_rtk);
+    //gps_data->latitude  = addRandomError(gps_data->latitude_rtk);
+    //gps_data->longitude = addRandomError(gps_data->longitude_rtk);
+    gps_data->latitude  = gps_data->latitude_rtk;
+    gps_data->longitude = gps_data->longitude_rtk;
 
-    gps_data->position_err = haversine(gps_data->latitude, gps_data->longitude, gps_data->latitude_rtk, gps_data->longitude_rtk);
-    printf("<>> %lf\n", gps_data->position_err);
+    //gps_data->position_err = haversine(gps_data->latitude, gps_data->longitude, gps_data->latitude_rtk, gps_data->longitude_rtk);
+    gps_data->position_err = 0;
+    //printf("<>> %lf\n", gps_data->position_err);
 
 }
 
@@ -339,6 +350,21 @@ void get_commands(struct cmd_t * cmd_p) {
     }
 }
 
+void replaceNewlineWithCRLF(char *str) {
+    char *pos;
+    while ((pos = strchr(str, '\n')) != NULL) {
+        // Shift the remaining part of the string to the right by one position
+        memmove(pos + 2, pos + 1, strlen(pos + 1) + 1);
+
+        // Replace '\n' with '\r\n'
+        pos[0] = '\r';
+        pos[1] = '\n';
+
+        // Move str pointer to continue searching
+        str = pos + 2;
+    }
+}
+
 /* -------------------------------------------*/
 // MAIN MAIN MAIN
 /* -------------------------------------------*/
@@ -383,6 +409,8 @@ int main() {
     dest_addr.sin_addr.s_addr = inet_addr(PHINS_IP);
 
     struct gps_data_t gps_data;
+    struct gps_data_t gps_data_tmp;  // Used to hold last gps data during a pause
+    
     char nmea_str[256];
     memset(nmea_str, 0, 256);
 
@@ -443,116 +471,88 @@ int main() {
         // Block on read a line 
         num_bytes = read(serial_fd, read_buf, sizeof(read_buf) - 1);
 
-        printf(">%s",read_buf);
-
         // Time stamp in milliseconds from epoch
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         gps_data.time_epoch = ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 
-        // Only care about GGA strings    
-        if ( strstr(read_buf,"GGA") == NULL ) continue; 
+        read_buf[num_bytes] = 0; // Null-terminate the string
 
-        // Cheap check on GPS antenna - don't send semaphore if it is disconnected
-        if ( strstr(read_buf,",,,,") != NULL ) continue; 
+        //if ( Verbose ) printf("in>%s",read_buf);
 
-        // Signals getinu_data
-        sem_post(sem);
-
-        if (num_bytes > 0) {
-            read_buf[num_bytes] = 0; // Null-terminate the string
-
-            //printf(">%d %s\n", cnt, read_buf);
-
-            // Extract the latitude, longitude and attitude
-            printf("read data %s\n",read_buf);
-            parseGPGGA(read_buf, &gps_data);
-
-            if ( Verbose ) printf("Lat/Lon %.7lf, %.7lf, %.7lf\n", gps_data.latitude, gps_data.longitude, gps_data.altitude);
-
+        if (num_bytes == 0) {
+            fprintf(stderr, "Zero Bytes Read\n");
+            continue;
         } else if (num_bytes < 0) {
             printf("Error reading: %s %d\n", strerror(errno),num_bytes);
 	        printf("%d %d %d\n",errno,EAGAIN,EWOULDBLOCK);
+            continue;
 	    }
 
-        // Absurd check of incoming
-        if ( (gps_data.latitude > 49) || (gps_data.latitude < 47) ) {
-            fprintf(stderr, "Latitude error %.7f\n", gps_data.latitude);
-            continue;
+        // We only care about GGA. PHINS prioritizes GGA
+        if ( strstr(read_buf,"GGA") == NULL ) {
+            continue; 
         }
 
-        if ( (gps_data.longitude < -117 ) || (gps_data.longitude > -116) ) {
-            fprintf(stderr, "Longitude error %.7f\n", gps_data.longitude);
-            continue;
+        // If the NMEA str has no values the antenna is probably not connected. 
+        if ( strstr(read_buf,",,,,") != NULL ) {
+            continue; 
         }
 
-        // gps quality decoder
-        // 0 Data invalid N/A
-        // 1 10m    Natural
-        // 2 3m     Differential
-        // 3 10m    Military
-        // 4 0.1m   RTK
-        // 5 0.3m  Float RTK
+        // Signals getinu_data on GGA input
+        sem_post(sem);
 
-        //int rnd = rand();
-        //double rand_pos = (double)rnd*pow(2,-51); 
-        //printf(">> %.12lf\n",rand_pos);
-
-        gps_data.altitude = -121.92; // 400 ft
-        
-        atacs_frame_out.gps_cnt = cnt++;
-
-        get_commands(&cmds);
-
-        // send GGA on a 8 second cycle
-        gps_data.atacs = 0;   // indicator if this is an ATACS cycle
-        if ( ( cnt % 8 ) == 0 ) {
-
-            // $GPGGA,001052.00,4758.76758057,N,11633.61604700,E,6,03,38.603,-2.112,M,,M,,*60
-            // $GPGGA,005704.01,4802.37924115,N,11632.77614893,E,6,03,85592.812,-0.214,M,,M,,*55
-            // $GPGGA,054913,4802.07087454,N,11633.61666800,W,1,08,,15.00,M,,M,,*6A
-            buildGGA(&gps_data, nmea_str);
-
-            atacs_frame_out.skip_atacs = cmds.type.skip_atacs; 
-            atacs_frame_out.delay = cmds.type.delay; 
-
-            atacs_frame_out.quality = gps_data.quality; 
-
-            // Skipping atacs? 
-            if ( cmds.type.skip_atacs > 0 ) {
-                cmds.type.skip_atacs--;
-            }
-            else {
-                gps_data.atacs = 1; 
-
-                // Delay position to PHINs test    
-                if ( cmds.type.delay > 0 ) { usleep(cmds.type.delay);  }
-
-                atacs_frame_out.atacs_cnt++;
-
-                ssize_t rtn = sendto(sockfd,  (const char *)nmea_str, strlen(nmea_str) , 0, (struct sockaddr *) &dest_addr, dest_addr_len);
-                if ( rtn < 0 ) {
-                    perror("Send Error ");
-                }
-   
-                printf("ATACS %u %lu %s",cnt, gps_data.time_epoch, nmea_str);
-                fflush(stdout);
-            }
+        if ( cmds.type.skip_atacs > 0 ) {
+            memcpy(&gps_data_tmp, &gps_data, sizeof(struct gps_data_t));   // Reuse gps position at the start of pause
+        } else {
+            parseGPGGA(read_buf, &gps_data);                     // Get the components in the GGA string
         }
 
         record_data(&gps_data);
 
-        // Transfer to shared memory region... protecting with mutex 
-        // mutex lock/unlock is acting up and squirrelly. 
-        // Not using for this file as only for passing information to gui not critical
-
-        // rtn = pthread_mutex_lock( &(atacs_frame_p->mutex) );
-        // if ( rtn ) { printf(">lockrtn %u  %s\n",rtn,strerror(rtn)); perror("lock mutex"); } 
-
+        // Transfer to shared memory region... for gui consumption
         memcpy(atacs_frame_p, &atacs_frame_out, sizeof(ATACS_FRAME_t));
-        
-        // rtn = pthread_mutex_unlock( &(atacs_frame_p->mutex) );
-        // if ( rtn ) { printf(">unlockrtn %u %s\n",rtn,strerror(rtn)); perror("unlock mutex"); } 
+
+        // ---------------------------------------------------------------
+        // This skip_atacs command is being used here to skip gps commands
+        // ---------------------------------------------------------------
+        get_commands(&cmds);
+
+        atacs_frame_out.gps_cnt = cnt++;
+        atacs_frame_out.quality = gps_data.quality; 
+        atacs_frame_out.atacs_cnt++;
+
+        atacs_frame_out.skip_atacs = cmds.type.skip_atacs; 
+
+        if ( cmds.type.skip_atacs > 0 ) {
+            cmds.type.skip_atacs--;
+            continue; 
+        } 
+
+        memcpy(&gps_data_tmp,&gps_data, sizeof(struct gps_data_t));   // Save off gps position to use when in pause state
+
+        //if ( Verbose ) printf("Lat/Lon %.7lf, %.7lf, %.7lf\n", gps_data.latitude, gps_data.longitude, gps_data.altitude);
+
+        // For some reason the PHINS will not accept a GGA string from the MASTERCLOCK
+        // Need to part the GGA string and build it     
+        // IN> $GNGGA,211503.191,4758.7846,N,11633.6317,W,1,11,1.0,611.2,M,-17.3,M,,0000*76
+        // BLD>$GPGGA,211503,4758.78460000,N,11633.63170000,W,1,11,1.0,611.20,M,,,,0000*34
+        //
+        // OK figured it out. The read GGA string only has a \n and it needs a \r\n
+        //buildGGA(&gps_data, nmea_str);
+        //strcpy(read_buf, nmea_str);
+
+        replaceNewlineWithCRLF(read_buf);
+    
+        // ---------------------------------------------------------
+        // Send off the output from the Masterclock GPS to the PHINS
+        // ---------------------------------------------------------
+        ssize_t rtn = sendto(sockfd,  (const char *)read_buf, strlen(read_buf) , 0, (struct sockaddr *) &dest_addr, dest_addr_len);
+        if ( rtn < 0 ) {
+            perror("Send Error ");
+        }
+
+        if ( Verbose ) printf("out>%ld %s", rtn, read_buf);
     }
 
     sem_close(sem);
