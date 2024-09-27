@@ -10,7 +10,7 @@ Orignal: Steve Troxel Jan 2024
 #ifndef parameters_util_h
 #define parameters_util_h
 
-#define LOCAL_IP "130.46.82.193"
+#define LOCAL_IP "130.46.83.30"
 #define PHINS_IP "130.46.83.248"
 
 #define PHINS_STDBIN_PORT 2002

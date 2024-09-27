@@ -109,8 +109,8 @@ int main(int argc, char* argv[]) {
         // Create a log entry running at >100 Hz. Remove when moving to GNC 
         if ( (count++ % 1000) == 0 )
         {
-            printf(">> time %.7f dpth %9.4f yaw %9.4f err_cnt:%u algo %04X\n", 
-                phins_frame_p->phins_status.phins_data.INS_data_timetag, 
+            printf(">> time %.f dpth %9.4f yaw %9.4f err_cnt:%u algo %04X\n", 
+                phins_frame_p->phins_status.phins_data.INS_data_timetag * 10000, 
                 phins_frame_p->phins_status.phins_data.INS_depth,
                 phins_frame_p->phins_status.phins_data.INS_attitude[2],err_cnt, phins_frame_p->algo_stat[0]);
             fflush(stdout);    

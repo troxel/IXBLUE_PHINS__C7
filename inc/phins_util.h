@@ -39,6 +39,8 @@ struct cmd_mnl_gps_data_t {
 };
 
 // -------------- Protos ------------
+uint32_t l2b_32(uint8_t * bp);
+uint16_t l2b_16(uint8_t b1,uint8_t b2);
 uint32_t b2l_32(uint8_t * bp);
 uint16_t b2l_16(uint8_t b1,uint8_t b2);
 uint16_t l2b_16(uint8_t b1,uint8_t b2);

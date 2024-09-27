@@ -489,6 +489,16 @@ uint32_t b2l_32(uint8_t * bp) {
 }
 
 // -------------------------------------
+uint32_t l2b_32(uint8_t * bp) {
+    uint32_t uint32 = 0;
+    uint32 += *(bp) << 0;
+    uint32 += *(bp + 1) << 8;
+    uint32 += *(bp + 2) << 16;
+    uint32 += *(bp + 3) << 24;
+    return uint32;
+}
+
+// -------------------------------------
 uint16_t b2l_16(uint8_t b1,uint8_t b2) {
     uint16_t uint16 = 0;
     uint16 += b1 << 8;

@@ -39,8 +39,8 @@ TARGET4_SRC=getphins_data.c shm_util.c
 TARGET4_OBJ=$(patsubst %.c,$(OBJDIR)/%.o,$(TARGET4_SRC))
 
 # Target 5 specific files 
-TARGET5=write_dpth_phins.exe
-TARGET5_SRC=write_dpth_phins.c 
+TARGET5=write_depth.exe
+TARGET5_SRC=write_depth.c stbn_util.c
 TARGET5_OBJ=$(patsubst %.c,$(OBJDIR)/%.o,$(TARGET5_SRC))
 
 # Target 6 specific files 
