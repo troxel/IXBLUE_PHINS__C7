@@ -546,6 +546,18 @@ float b2l_lf(uint8_t*  bp) {
 }
 
 // -------------------------------------
+// Ditto of b2l_f but name may cause confusion
+// Action the same
+// -------------------------------------
+float l2b_f(uint8_t * bp) {
+
+    float f_val;
+    uint8_t b[] = {*(bp+3), *(bp+2), *(bp+1), *(bp) };  // Floating point appears to be stored in lsb first 
+    memcpy(&f_val, &b, sizeof(float));
+    return f_val;
+}
+
+// -------------------------------------
 uint32_t checksum(uint8_t* bp, ssize_t length) {
 
     uint32_t chksum = 0;

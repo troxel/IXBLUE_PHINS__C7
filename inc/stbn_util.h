@@ -64,7 +64,7 @@ void bld_ins_to_gnc_04(struct stbn_payload_v1_t *stbn_pyld, uint16_t *ins_to_gnc
 void bld_ins_to_gnc_07(struct stbn_payload_v1_t *stbn_pyld, uint16_t *ins_to_gnc_07);
 void bld_ins_to_hud_01(struct stbn_payload_v1_t *stbn_pyld, uint16_t *ins_to_hud_01);
 
-float b2l_fr(uint8_t *); // test delete
 float b2l_f(uint8_t *);
+float l2b_f(uint8_t *);
 
 #endif

@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
+#include <stbn_util.h>
 
 // Define the header size
 #define HEADER_SIZE 25
@@ -36,6 +37,8 @@ int sockfd;
 void byte_array_to_hex_string(const unsigned char *bytes, int len);
 uint32_t get_utc_time_100us();
 uint32_t milliseconds_since_midnight_gmt();
+
+uint8_t Debug = 1; 
 
 // Function to prepare the header
 void prepare_header(uint8_t *header, uint16_t payload_size) {
@@ -60,10 +63,10 @@ void prepare_header(uint8_t *header, uint16_t payload_size) {
     header[9] = 0x00;
     header[10] = 0x00;
 
-    // External Data Bit Mask: 0x00 00 01 00
+    // External Data Bit Mask: 0x00 02 00 00 (9th bit zero based)
     header[11] = 0x00;
     header[12] = 0x00;
-    header[13] = 0x01;
+    header[13] = 0x02;
     header[14] = 0x00;
 
     // Total Telegram Size: 25 + payload size 
@@ -80,36 +83,38 @@ void prepare_header(uint8_t *header, uint16_t payload_size) {
 }
 
 // Function to prepare the payload (Depth data block (bit n°9))
-void prepare_payload(uint8_t *payload, float depth, float depth_std_dev) {
+void prepare_payload(uint8_t *payload, float depth, float depth_stddev) {
+
     // Depth Data Block (Bit 9)
-    
-    // Data validity time (4 bytes, let's use 0 for simplicity)
-    // Try 0x7FC0000 as per Page 149
-    // payload[0] = 0x7F;
-    // payload[1] = 0xC0;
-    // payload[2] = 0x00;
-    // payload[3] = 0x00;
-
-
-    int32_t utc_ts = -1;
-    //int32_t utc_ts = htonl(0x7FC0000);
+   
+    //int32_t utc_ts = -1;
+    int32_t utc_ts = 0x7FC00000;  // Uses time of reception for timing. 
     //int32_t utc_ts = 0;
-    //int32_t utc_ts = milliseconds_since_midnight_gmt();
-
-    printf("ts ===> %d\n",utc_ts);
+    //int32_t utc_ts = milliseconds_since_midnight_gmt();  // Rqrs NTP
 
     int32_t utc_ts_be = htonl(utc_ts);
 
     // First element is 4 bytes of utc_time in big endian order
     memcpy(payload,&utc_ts_be,sizeof utc_ts_be);
 
-    // Depth (Float, 4 bytes, not byte swapped)
+    // -------------------------------
+    // From Dan at Exail
+    // 49 58 03 00 00 00 00 00 00 00 00 00 00 02 00 00 29 00 00 00 00 00 00 00 00 7F C0 00 00 3F 80 00 00 3D CC CC CD 00 00 05 6F   - dan
+
+    depth = l2b_f((uint8_t *) &depth);
+
+    // Depth (Float, 4 bytes swapped)
     memcpy(&payload[4],&depth,sizeof depth);
- 
-    // Depth Standard Deviation (Float, 4 bytes, not byte swapped)
-    memcpy(&payload[8],&depth_std_dev,sizeof depth_std_dev);
+
+    // Depth Standard Deviation (Float, 4 bytes swapped)
+    depth_stddev = l2b_f((uint8_t *) &depth_stddev);
+
+    memcpy(&payload[8],&depth_stddev,sizeof depth_stddev);
 }
 
+// ------------------------------------
+// main entry
+// ------------------------------------
 int main() {
     uint8_t header[HEADER_SIZE];
     uint16_t payload_size = 12;  // Depth data block size (12 bytes)
@@ -118,12 +123,6 @@ int main() {
 
     size_t n_elements = (HEADER_SIZE + payload_size + sizeof chksum);
     uint8_t datagram[n_elements];
-
-    FILE *fp;
-
-    // Prepare the header
-    prepare_header(header, payload_size);
-    byte_array_to_hex_string(header,sizeof header);
 
     // Create socket
     sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -140,95 +139,76 @@ int main() {
     dest_addr.sin_port        = htons(PHINS_DEPTH_PORT);
     dest_addr.sin_addr.s_addr = inet_addr(PHINS_IP);
 
-    while (1) {
+    // Prepare the header
+    prepare_header(header, payload_size);
 
-        // write out binary for Exail 
-        fp = fopen("datagram.bin", "wb");
-        if (fp == NULL) {
-            perror("Error opening file");
-            return 1;
-        }
+    while (1) {
 
         memcpy(datagram, header, HEADER_SIZE);
 
         // Prepare the payload (depth data)
-        float depth = 100.5;
-        float depth_std_dev = 0.05;
-        prepare_payload(payload, depth, depth_std_dev);
-        byte_array_to_hex_string(payload,sizeof payload);
+        float depth = 400.432;
+        float depth_stddev = 1;
+
+        prepare_payload(payload, depth, depth_stddev);
 
         memcpy(datagram + HEADER_SIZE, payload, payload_size);
 
         chksum = checksum(datagram, n_elements);
 
-        printf("chksum = %d, %.04X\n",chksum,chksum);
         uint32_t chksum_be = htonl(chksum);  // Convert to big-endian
-        printf("chksum_be = %.04X\n",chksum_be);
 
         // Append the checksum to the end of the datagram
         memcpy(datagram + HEADER_SIZE + payload_size, &chksum_be, sizeof chksum_be);
-
-        byte_array_to_hex_string(datagram,sizeof datagram);
 
         ssize_t rtn = sendto(sockfd, datagram, sizeof datagram, 0, (struct sockaddr *) &dest_addr, dest_addr_len);
         if ( rtn < 0 ) {
             perror("Send Error ");
         }
         else {
-            printf("sent datagram\n");
+            printf("sent datagram %lu bytes\n",rtn);
+            if ( Debug ) { byte_array_to_hex_string(datagram,sizeof datagram); }
         }
         
-        size_t written = fwrite(datagram,sizeof(uint8_t), n_elements, fp);
-        printf("written %ld\n",written);
-
-        fclose(fp);
-
-        sleep(5);
+        sleep(1);
     }
 
     return 0;
 }
 
+// -------------------------------------------------
+// Debug display function layout out the byte string
+// -------------------------------------------------
 void byte_array_to_hex_string(const unsigned char *bytes, int len) {
     int i;
     char hex_string[1024];
     char separator = ' '; 
+
     for (i = 0; i < len; i++) {
         sprintf(hex_string + i * 3, "%02X%c", bytes[i], (i < len - 1) ? separator : '\0');
     }
     printf("%s\n",hex_string);
-}
 
-// Returns UTC time as an unsigned long integer in steps of 100 microseconds.
-// uint32_t get_utc_time_100us() {
-//   struct timespec ts;
-//   clock_gettime(CLOCK_REALTIME, &ts);
+    printf("hdr1\t\t\t%02X %c%c\n",bytes[0],hex_string[0],hex_string[1]);
+    printf("hdr2\t\t\t%02X\n",bytes[1]);
+    printf("vers\t\t\t%02X\n",bytes[2]);
+    printf("NavBlk\t\t\t%02X %02X %02X %02X\n",bytes[3],bytes[4],bytes[5],bytes[6]);
+    printf("ExtBlk\t\t\t%02X %02X %02X %02X\n",bytes[7],bytes[8],bytes[9],bytes[10]);
+    printf("ExnBlk\t\t\t%02X %02X %02X %02X\n",bytes[11],bytes[12],bytes[13],bytes[14]);
+    printf("Size\t\t\t%02X %02X = %u\n",bytes[15],bytes[16],(uint16_t)bytes[16]);
+    printf("TS Ref\t\t\t%02X\n",bytes[17]);
+    printf("RFU\t\t\t%02X %02X %02X %02X %02X %02X %02X \n",bytes[18],bytes[19],bytes[20],bytes[21],bytes[22],bytes[23],bytes[24]);
 
-//   // Calculate the number of 100 microsecond intervals since the epoch.
-//   //uint32_t time_100us = (ts.tv_sec * 10000) + (ts.tv_nsec / 10000);
+    printf("Vldyt\t\t\t%02X %02X %02X %02X\n",bytes[25],bytes[26],bytes[27],bytes[28]);
 
-//     printf("\nsec = %lu %lu %lu %lu\n\n",ts.tv_sec,ts.tv_sec * 10000,ts.tv_nsec / 100000,(ts.tv_sec * 10000) + (ts.tv_nsec / 100000));
+    printf("Dpth\t\t\t%02X %02X %02X %02X\n",bytes[29],bytes[30],bytes[31],bytes[32]);
+    printf("Dpthstd\t\t\t%02X %02X %02X %02X\n",bytes[33],bytes[34],bytes[35],bytes[36]);
 
-//   uint32_t time_100us = (ts.tv_sec * 10000) + (ts.tv_nsec / 100000);
-//   printf("\nsec = %u %u\n\n",time_100us, (uint32_t)(ts.tv_sec * 10000 + ts.tv_nsec / 100000));
-
-//   return time_100us;
-// }
-
-//----------------------------------------------------
-uint32_t get_utc_time_100us() {
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-
-    // Convert seconds to 100-microsecond units and add nanoseconds / 100,000
-    //uint32_t epoch_in_100us = (ts.tv_sec * 10000) + (ts.tv_nsec / 100000);
-    uint32_t epoch_in_100us = (uint32_t)(ts.tv_sec*1000);
-
-
-    return epoch_in_100us;
+    printf("chksum\t\t\t%02X %02X %02X %02X\n",bytes[37],bytes[38],bytes[39],bytes[40]);
 }
 
 //----------------------------------------------------
+// Require PHINS in NTP mode
 uint32_t milliseconds_since_midnight_gmt() {
     // Get the current time in GMT
     struct timespec ts;
