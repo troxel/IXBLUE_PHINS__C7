@@ -16,7 +16,6 @@
 #include <errno.h>
 
 #include "udp_util.h"
-#include "tcp_util.h"
 #include "phins_util.h"
 #include "parameters.h"
 

@@ -5,7 +5,6 @@
 #include <netinet/in.h>
 #include <time.h>
 #include <unistd.h>
-#include <byteswap.h>
 #include <stdbool.h>
 #include <math.h>
 #include <stddef.h>

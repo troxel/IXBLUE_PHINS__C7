@@ -16,7 +16,6 @@
 #include <errno.h>
 
 #include "udp_util.h"
-#include "tcp_util.h"
 #include "phins_util.h"
 
 #include "parameters.h"
@@ -172,8 +171,6 @@ int main(int argc, char *argv[]) {
                 // If reset is sent have to restart this process as tcp doesn't work anymore
                 // Might use RS232 to solve this behavior. 
                 if ( reset_flg ) {
-
-                    int rtn;
 
                     // Reset as tcp needs to reconnect.
                     sleep(40);

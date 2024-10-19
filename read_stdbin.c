@@ -34,13 +34,13 @@ int main(int argc, char* argv[]) {
     uint32_t err_cnt=0; 
     int rtn; 
 
-    // Create socket
+    // Create UDP socket
     sockfd = open_udp_svr_sock(PHINS_STDBIN_PORT);
 
     ssize_t dg_len; 
     memset(dg_buf, 0, BUFFER_SIZE);
 
-    printf("Socket Opened %d\n",sockfd);
+    printf("UDP Socket Opened %d\n",sockfd);
 
     // Set up the ins data structure and share it.
     int shm_fd = shm_open(SHM_FILE, O_CREAT | O_RDWR, 0666);
@@ -76,7 +76,7 @@ int main(int argc, char* argv[]) {
         // Waits for buffer of data... 
         dg_len = read_udp_socket(sockfd, dg_buf, BUFFER_SIZE);
         if ( dg_len < 1 ) {
-            perror("Read Error UDP Socket Phins");
+            perror("Read Error UDP Socket STDBIN Phins");
             err_cnt++;
             sleep(1);
             continue; 
@@ -91,14 +91,14 @@ int main(int argc, char* argv[]) {
         //------- Populate phins_frame_out with phins data ----
         // ---------------------------------------------------
         if ( ! proc_phins_frame_buf(dg_buf, dg_len, &phins_frame_out) ) {
-            fprintf(stderr, "Check Sum Failed\n");
+            perror("STDBIN Check Sum Failed");
             continue; 
         }
 
         // Transfer to shared memory region... protecting with mutex 
         // mutex lock/unlock and returning an error but process error is success? Need investigation.
+        // If successful returns zero. Otherwise, an error number is returned to indicate the error.
         rtn = pthread_mutex_lock( &(phins_frame_p->mutex) );
-
         if ( rtn ) { printf(">lockrtn %u  %s\n",rtn,strerror(rtn)); perror("lock mutex"); } 
 
         memcpy(phins_frame_p, &phins_frame_out, sizeof(PHINS_FRAME_t));

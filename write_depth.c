@@ -10,13 +10,10 @@
 
 #include <time.h>
 #include <unistd.h>
-#include <byteswap.h>
 #include <math.h>
-#include <error.h>
 #include <errno.h>
 
 #include "udp_util.h"
-#include "tcp_util.h"
 #include "phins_util.h"
 #include "parameters.h"
 
@@ -147,7 +144,7 @@ int main() {
         memcpy(datagram, header, HEADER_SIZE);
 
         // Prepare the payload (depth data)
-        float depth = 400.432;
+        float depth = 100.432;
         float depth_stddev = 1;
 
         prepare_payload(payload, depth, depth_stddev);
@@ -189,22 +186,24 @@ void byte_array_to_hex_string(const unsigned char *bytes, int len) {
     }
     printf("%s\n",hex_string);
 
-    printf("hdr1\t\t\t%02X %c%c\n",bytes[0],hex_string[0],hex_string[1]);
-    printf("hdr2\t\t\t%02X\n",bytes[1]);
-    printf("vers\t\t\t%02X\n",bytes[2]);
-    printf("NavBlk\t\t\t%02X %02X %02X %02X\n",bytes[3],bytes[4],bytes[5],bytes[6]);
-    printf("ExtBlk\t\t\t%02X %02X %02X %02X\n",bytes[7],bytes[8],bytes[9],bytes[10]);
-    printf("ExnBlk\t\t\t%02X %02X %02X %02X\n",bytes[11],bytes[12],bytes[13],bytes[14]);
-    printf("Size\t\t\t%02X %02X = %u\n",bytes[15],bytes[16],(uint16_t)bytes[16]);
-    printf("TS Ref\t\t\t%02X\n",bytes[17]);
-    printf("RFU\t\t\t%02X %02X %02X %02X %02X %02X %02X \n",bytes[18],bytes[19],bytes[20],bytes[21],bytes[22],bytes[23],bytes[24]);
+    if ( 0 ) {
+        printf("hdr1\t\t\t%02X %c%c\n",bytes[0],hex_string[0],hex_string[1]);
+        printf("hdr2\t\t\t%02X\n",bytes[1]);
+        printf("vers\t\t\t%02X\n",bytes[2]);
+        printf("NavBlk\t\t\t%02X %02X %02X %02X\n",bytes[3],bytes[4],bytes[5],bytes[6]);
+        printf("ExtBlk\t\t\t%02X %02X %02X %02X\n",bytes[7],bytes[8],bytes[9],bytes[10]);
+        printf("ExnBlk\t\t\t%02X %02X %02X %02X\n",bytes[11],bytes[12],bytes[13],bytes[14]);
+        printf("Size\t\t\t%02X %02X = %u\n",bytes[15],bytes[16],(uint16_t)bytes[16]);
+        printf("TS Ref\t\t\t%02X\n",bytes[17]);
+        printf("RFU\t\t\t%02X %02X %02X %02X %02X %02X %02X \n",bytes[18],bytes[19],bytes[20],bytes[21],bytes[22],bytes[23],bytes[24]);
 
-    printf("Vldyt\t\t\t%02X %02X %02X %02X\n",bytes[25],bytes[26],bytes[27],bytes[28]);
+        printf("Vldyt\t\t\t%02X %02X %02X %02X\n",bytes[25],bytes[26],bytes[27],bytes[28]);
 
-    printf("Dpth\t\t\t%02X %02X %02X %02X\n",bytes[29],bytes[30],bytes[31],bytes[32]);
-    printf("Dpthstd\t\t\t%02X %02X %02X %02X\n",bytes[33],bytes[34],bytes[35],bytes[36]);
+        printf("Dpth\t\t\t%02X %02X %02X %02X\n",bytes[29],bytes[30],bytes[31],bytes[32]);
+        printf("Dpthstd\t\t\t%02X %02X %02X %02X\n",bytes[33],bytes[34],bytes[35],bytes[36]);
 
-    printf("chksum\t\t\t%02X %02X %02X %02X\n",bytes[37],bytes[38],bytes[39],bytes[40]);
+        printf("chksum\t\t\t%02X %02X %02X %02X\n",bytes[37],bytes[38],bytes[39],bytes[40]);
+    }
 }
 
 //----------------------------------------------------

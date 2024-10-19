@@ -537,7 +537,8 @@ float b2l_lf(uint8_t*  bp) {
 
     double lf_val;
     uint8_t b[8];
-    for (int i=0;i<8;i++) {
+    uint8_t i;
+    for (i=0;i<8;i++) {
         b[7-i] = *(bp + i);
     }   
 
@@ -561,7 +562,8 @@ float l2b_f(uint8_t * bp) {
 uint32_t checksum(uint8_t* bp, ssize_t length) {
 
     uint32_t chksum = 0;
-    for (int i=0;i<=length-4;i++) {
+    uint8_t i;
+    for (i=0;i<=length-4;i++) {
         chksum += *(bp + i);
     }   
 

@@ -43,7 +43,9 @@ uint8_t Verbose = true;
 // -----------------------------
 // This process takes input from the MasterClock GPS and passes it on to the PHINS. 
 // We could send the GPS directly to the PHINS but the data would not get written
-// to disk and this process sends a semaphore to clocks out the writing of phins data. 
+// to disk and this process sends a semaphore to clocks out the writing of phins data.
+// 
+// Changed this process to recieve data via a UDP socket or serial depending on a #define. 
 // -----------------------------
 
 // -----------------------------
@@ -319,7 +321,8 @@ struct cmd_t {
 // ------------------------------
 void get_commands(struct cmd_t * cmd_p) {
 
-    for (int i = 0; i<2; i++ ) {
+    uint8_t i; 
+    for (i = 0; i<2; i++ ) {
 
         FILE *file;
         //int value = 0;
@@ -374,12 +377,6 @@ int main() {
     cmds.fspec[0] = "./delay";
     cmds.fspec[1] = "./skip_atacs";
 
-    //const char *device = "/dev/ttyATACS";
-    const char *device = "/dev/ttyUSB0";
-    
-    //const int baudrate = B19200;
-    const int baudrate = B115200;
-
     // -----------------------------
     // Semaphor timing
     // -----------------------------
@@ -388,17 +385,20 @@ int main() {
     // -----------------------------
     // Socket
     // -----------------------------
-    int sockfd;
+    int sock_fd_out;
     uint8_t buffer[BUFFER_SIZE];
 
     memset(buffer, 0, BUFFER_SIZE);
 
-    // Create socket
-    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
+    // Create output socket
+    sock_fd_out = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock_fd_out < 0) {
        perror("socket()");
        exit(1);
     }
+
+    // File descriptor could be socket or serial depending on #define
+    int dev_in;
 
     struct sockaddr_in dest_addr;
     socklen_t dest_addr_len = sizeof(struct sockaddr_in);
@@ -424,11 +424,28 @@ int main() {
 
     srand(time(NULL));
 
-    int serial_fd = open_serial_port(device, baudrate);
+#ifdef Serial 
+
+    //const char *device = "/dev/ttyATACS";
+    const char *device = "/dev/ttyUSB0";
+    
+    //const int baudrate = B19200;
+    const int baudrate = B115200;
+
+    dev_in = open_serial_port(device, baudrate);
     if ( serial_fd < 0 ) {
         return EXIT_FAILURE;
     }
-    printf("opened serial port %s\n",device);
+    printf("Serial Port Opened %s\n",device);
+
+#else
+
+    // Create UDP socket
+    // Present IP is 130.46.82.169:4001
+    dev_in = open_udp_svr_sock(4001);
+    printf("UDP Socket 4001 Opened %d\n",dev_in);
+
+#endif
 
     char read_buf[256];
     memset(read_buf, '\0', sizeof(read_buf));
@@ -468,8 +485,26 @@ int main() {
     // -------------------------------- 
     while (1) {
 
+    #ifdef Serial 
+
         // Block on read a line 
-        num_bytes = read(serial_fd, read_buf, sizeof(read_buf) - 1);
+        num_bytes = read(dev_in, read_buf, sizeof(read_buf) - 1);
+
+    #else
+
+        // Waits for buffer of data... 
+        num_bytes = read_udp_socket(dev_in, read_buf, sizeof(read_buf) - 1);
+
+    #endif
+
+        if (num_bytes == 0) {
+            fprintf(stderr, "Zero Bytes Read\n");
+            continue;
+        } else if (num_bytes < 0) {
+            printf("Error reading: %s %d\n", strerror(errno),num_bytes);
+	        //printf("%d %d %d\n",errno,EAGAIN,EWOULDBLOCK);
+            continue;
+	    }
 
         // Time stamp in milliseconds from epoch
         struct timespec ts;
@@ -479,15 +514,6 @@ int main() {
         read_buf[num_bytes] = 0; // Null-terminate the string
 
         //if ( Verbose ) printf("in>%s",read_buf);
-
-        if (num_bytes == 0) {
-            fprintf(stderr, "Zero Bytes Read\n");
-            continue;
-        } else if (num_bytes < 0) {
-            printf("Error reading: %s %d\n", strerror(errno),num_bytes);
-	        printf("%d %d %d\n",errno,EAGAIN,EWOULDBLOCK);
-            continue;
-	    }
 
         // We only care about GGA. PHINS prioritizes GGA
         if ( strstr(read_buf,"GGA") == NULL ) {
@@ -542,23 +568,28 @@ int main() {
         //buildGGA(&gps_data, nmea_str);
         //strcpy(read_buf, nmea_str);
 
-        replaceNewlineWithCRLF(read_buf);
+        // Configured masterclock to output \r\n
+        //replaceNewlineWithCRLF(read_buf);
     
         // ---------------------------------------------------------
         // Send off the output from the Masterclock GPS to the PHINS
         // ---------------------------------------------------------
-        ssize_t rtn = sendto(sockfd,  (const char *)read_buf, strlen(read_buf) , 0, (struct sockaddr *) &dest_addr, dest_addr_len);
+        ssize_t rtn = sendto(sock_fd_out,  (const char *)read_buf, strlen(read_buf) , 0, (struct sockaddr *) &dest_addr, dest_addr_len);
         if ( rtn < 0 ) {
             perror("Send Error ");
         }
 
-        if ( Verbose ) printf("out>%ld %s", rtn, read_buf);
+        if ( Verbose ) {
+            printf("out>%ld %s", rtn, read_buf);
+        }
+
+        usleep(90000); // Try to Prevent: "Resource Temporarily Unavailable" error
     }
 
     sem_close(sem);
     sem_unlink(SHM_FILE_ATACS);
 
-    //close(sockfd);
+    //close(sock_fd_out);
     return 0;
 }
 

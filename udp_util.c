@@ -1,5 +1,4 @@
 /*--------------------------------------------------
-
 Utility Functions to facilitate UDP communications.
 
 Version History
@@ -14,6 +13,7 @@ Orignal: SOT Jan 2024
 #include <string.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <fcntl.h>
 
 #include "udp_util.h"
 
@@ -25,6 +25,10 @@ int open_udp_svr_sock(int port) {
   sockfd = socket(AF_INET, SOCK_DGRAM, 0);
   if (sockfd < 0) 
       return -1;
+
+  // Getting Resource Temporarly Not Available ensure non-blocking 
+  int flags = fcntl(sockfd, F_GETFL, 0);
+  fcntl(sockfd, F_SETFL, flags & ~O_NONBLOCK);  // Clear the O_NONBLOCK flag
 
   memset(&server_addr, 0, sizeof(server_addr));
   server_addr.sin_family = AF_INET;
@@ -54,11 +58,3 @@ ssize_t read_udp_socket(int sockfd, void *buffer, size_t length) {
 
   return recvfrom(sockfd, buffer, length, 0, &src_addr, &src_addr_len);
 }
-
-// Function to close a UDP socket
-int close_udp_socket(int sockfd) {
-  return close(sockfd);
-}
-
-
-

@@ -308,7 +308,8 @@ struct cmd_t {
 // ------------------------------
 void get_commands(struct cmd_t * cmd_p) {
 
-    for (int i = 0; i<2; i++ ) {
+    uint8_t i;
+    for (i = 0; i<2; i++ ) {
 
         FILE *file;
         //int value = 0;

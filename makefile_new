@@ -1,0 +1,44 @@
+# Compiler and flags
+CC = gcc
+CFLAGS = -g -Wall -I./inc
+LDFLAGS = -lm -lpthread
+
+# Directories
+OBJDIR = ./obj
+BINDIR = ./bin
+
+# Source files
+COMMON_SRC = udp_util.c phins_util.c
+TARGETS = read_stdbin write_phins write_phins_cmds getphins_data write_depth data2csv write_atacs write_gps
+TARGETS_SRC = \
+    read_stdbin.c haversine.c stbn_util.c \
+    write_phins.c \
+    write_phins_cmds.c \
+    getphins_data.c shm_util.c \
+    write_depth.c stbn_util.c \
+    data2csv.c \
+    write_atacs.c haversine.c \
+    write_gps.c haversine.c
+
+# Create directories if they don't exist
+$(shell mkdir -p $(OBJDIR))
+$(shell mkdir -p $(BINDIR))
+
+# Pattern rule for object files
+OBJ_FILES = $(patsubst %.c,$(OBJDIR)/%.o,$(COMMON_SRC) $(TARGETS_SRC))
+
+$(OBJDIR)/%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Linking rule for each target
+$(BINDIR)/%: $(OBJDIR)/%.o $(OBJ_FILES)
+	$(CC) $(OBJDIR)/$*.o $(OBJ_FILES) $(LDFLAGS) -o $@
+
+# Targets
+all: $(patsubst %,$(BINDIR)/%,$(TARGETS))
+
+# Clean rule
+clean:
+	rm -f $(OBJDIR)/*.o $(BINDIR)/*
+
+.PHONY: all clean

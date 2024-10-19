@@ -10,8 +10,13 @@ Orignal: Steve Troxel Jan 2024
 #ifndef parameters_util_h
 #define parameters_util_h
 
-#define LOCAL_IP "130.46.83.30"
-#define PHINS_IP "130.46.83.248"
+#ifdef QNX
+   #define LOCAL_IP "130.46.83.30"
+   #define PHINS_IP "130.46.83.248"
+#else
+   #define LOCAL_IP "130.46.83.30"
+   #define PHINS_IP "130.46.83.248"
+#endif
 
 #define PHINS_STDBIN_PORT 2002
 #define PHINS_GPS_PORT 8121
@@ -28,7 +33,5 @@ Orignal: Steve Troxel Jan 2024
 #define SHM_FILE "phins_data"
 
 #define SEM_TIME_FILE "/gps_timing"
-
-
 
 #endif
